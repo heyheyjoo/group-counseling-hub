@@ -27,6 +27,22 @@ export const Step4Archiving: React.FC<Step4ArchivingProps> = ({
     downloadAnchor.remove();
   };
 
+  if (mode === 'student') {
+    return (
+      <div style={styles.studentFinishContainer}>
+        <div style={styles.studentFinishIcon}>🎉</div>
+        <h2 style={styles.studentFinishTitle}>오늘 집단상담, 정말 수고하셨습니다!</h2>
+        <p style={styles.studentFinishSub}>
+          서로의 마음을 나누고 공감하며 한 걸음 더 성장한 오늘,<br/>
+          여러분의 빛나는 내일을 진심으로 응원합니다.
+        </p>
+        <div style={{ ...styles.studentWaitBadge, marginTop: '32px', display: 'inline-block' }}>
+          선생님이 '새 세션'을 시작하면 자동으로 1단계로 이동합니다.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={styles.container}>
       <div style={styles.header}>
@@ -54,7 +70,7 @@ export const Step4Archiving: React.FC<Step4ArchivingProps> = ({
           💾 기록 내보내기 (JSON 다운로드)
         </button>
 
-        {mode === 'teacher' ? (
+        {mode === 'teacher' && (
           <button
             onClick={onRestart}
             style={styles.restartBtn}
@@ -63,10 +79,6 @@ export const Step4Archiving: React.FC<Step4ArchivingProps> = ({
           >
             🔄 새 세션 시작하기 (1단계로)
           </button>
-        ) : (
-          <div style={styles.studentWaitBadge}>
-            선생님이 '새 세션'을 시작하면 자동으로 1단계로 이동합니다.
-          </div>
         )}
       </div>
 
@@ -384,5 +396,35 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontSize: '13px',
     color: '#7E7E7E',
     fontStyle: 'italic',
+  },
+  studentFinishContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '80px 20px',
+    backgroundColor: '#FFFFFF',
+    borderRadius: '24px',
+    border: '2px dashed #A8D5C2',
+    textAlign: 'center',
+    maxWidth: '600px',
+    margin: '40px auto',
+    animation: 'fadeIn 0.5s ease-out',
+  },
+  studentFinishIcon: {
+    fontSize: '64px',
+    marginBottom: '24px',
+  },
+  studentFinishTitle: {
+    fontSize: '24px',
+    fontWeight: '700',
+    color: '#4A4A4A',
+    marginBottom: '12px',
+  },
+  studentFinishSub: {
+    fontSize: '16px',
+    color: '#7E7E7E',
+    lineHeight: '1.6',
+    marginBottom: '8px',
   },
 };
