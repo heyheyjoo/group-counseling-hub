@@ -13,32 +13,19 @@ interface Step2AiMatcherProps {
 const FALLBACK_RECOMMENDATIONS: TheoryRecommendation[] = [
   {
     theory: '변증법적 행동치료 (DBT)',
-    matchRate: 94,
+    matchRate: 98,
     reason:
       '집단원들의 고민에서 대인관계 갈등과 충동적 분노/감정조절 어려움의 키워드가 다수 검출되었습니다. DBT는 감정조절 장애와 대인관계 효율성 개선을 위한 TIPP(신체 감각 자극) 기법 및 마음챙김 호흡 훈련을 내포하고 있어 현 상태에 최적입니다.',
     tags: ['#감정조절', '#TIPP 기법', '#마음챙김 호흡'],
-  },
-  {
-    theory: '인지행동치료 (CBT)',
-    matchRate: 76,
-    reason: '부정적 인지왜곡 및 시험 스트레스 등 사고 패턴 교정에 유용합니다.',
-    tags: ['#생각기록장', '#자동적사고'],
-  },
-  {
-    theory: '해결중심 단기치료 (SFBT)',
-    matchRate: 68,
-    reason:
-      '과거 원인 규명보다는 예외적 상황을 찾아 해결책을 모색하는 강점 기반 치료입니다.',
-    tags: ['#기적질문', '#예외질문'],
-  },
+  }
 ];
 
 const FALLBACK_KEYWORDS = [
   '대인관계 갈등',
-  '학업 긴장',
   '감정 조절의 어려움',
   '충동적 분노',
-  '부모님 소통 부재',
+  '공허함',
+  '스트레스 내성 저하',
 ];
 
 export const Step2AiMatcher: React.FC<Step2AiMatcherProps> = ({
@@ -210,29 +197,31 @@ export const Step2AiMatcher: React.FC<Step2AiMatcherProps> = ({
             </div>
           )}
 
-          <div style={styles.dividerTitle}>다른 제안된 대안 기법</div>
-
-          {/* 대안 추천 카드들 */}
-          <div style={styles.alternativesGrid}>
-            {altRecs.map((rec) => (
-              <div
-                key={rec.theory}
-                style={styles.altCard}
-                onClick={() => onSelectTheory(rec.theory)}
-                onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
-                onMouseLeave={(e) => (e.currentTarget.style.transform = 'none')}
-              >
-                <div style={styles.altBadge}>매칭률 {rec.matchRate}%</div>
-                <h4 style={styles.altTitle}>{rec.theory}</h4>
-                <p style={styles.altDesc}>{rec.reason}</p>
-                <div style={styles.tagListSmall}>
-                  {rec.tags.map((tag, i) => (
-                    <span key={i}>{tag}</span>
-                  ))}
-                </div>
+          {altRecs.length > 0 && (
+            <>
+              <div style={styles.dividerTitle}>다른 제안된 대안 기법</div>
+              <div style={styles.alternativesGrid}>
+                {altRecs.map((rec) => (
+                  <div
+                    key={rec.theory}
+                    style={styles.altCard}
+                    onClick={() => onSelectTheory(rec.theory)}
+                    onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.transform = 'none')}
+                  >
+                    <div style={styles.altBadge}>매칭률 {rec.matchRate}%</div>
+                    <h4 style={styles.altTitle}>{rec.theory}</h4>
+                    <p style={styles.altDesc}>{rec.reason}</p>
+                    <div style={styles.tagListSmall}>
+                      {rec.tags.map((tag, i) => (
+                        <span key={i}>{tag}</span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </>
+          )}
         </div>
       )}
     </div>

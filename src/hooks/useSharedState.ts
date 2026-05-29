@@ -137,32 +137,32 @@ export const useSharedState = () => {
     const dummyData: Issue[] = [
       {
         id: 'dummy-1',
-        text: '친구 관계가 요즘 너무 삐걱거려서 학교 가는 게 무섭고 스트레스 받아요.',
-        emoji: '😢',
+        text: '갑자기 화가 치밀어 오를 때 감정을 주체하기가 너무 힘들어요.',
+        emoji: '😡',
         createdAt: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
       },
       {
         id: 'dummy-2',
-        text: '시험 기간이 다가올 때마다 심장이 터질 것 같고 아무것도 손에 안 잡혀요.',
+        text: '친구와 사소한 다툼이 생기면 관계가 끝날까 봐 극도로 불안해집니다.',
         emoji: '😰',
         createdAt: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
       },
       {
         id: 'dummy-3',
-        text: '작은 일에도 갑자기 감정이 욱하고 솟구쳐서 나중에 후회하곤 해요.',
-        emoji: '😡',
+        text: '스트레스를 받으면 충동적으로 행동해서 나중에 항상 후회해요.',
+        emoji: '💥',
         createdAt: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
       },
       {
         id: 'dummy-4',
-        text: '부모님이 제 이야기를 전혀 들어주지 않으시는 것 같아 집에서도 외롭습니다.',
-        emoji: '😔',
+        text: '내 감정이 뭔지 잘 모르겠고, 텅 빈 것 같은 기분이 들 때가 많아요.',
+        emoji: '🫥',
         createdAt: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
       },
       {
         id: 'dummy-5',
-        text: '순간적으로 참지 못하고 화를 내거나 충동적으로 행동해서 큰 오해를 사요.',
-        emoji: '🔥',
+        text: '부정적인 생각이 한 번 들면 멈추기가 어려워서 너무 괴롭습니다.',
+        emoji: '🌪️',
         createdAt: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
       },
     ];

@@ -44,7 +44,7 @@ function App() {
   if (!mode || step === 0) {
     return (
       <div className="app-container">
-        <IntroPage
+        <IntroPage onSelectMode={handleSelectMode} />
       </div>
     );
   }
