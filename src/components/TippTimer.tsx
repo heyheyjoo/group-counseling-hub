@@ -16,6 +16,19 @@ export const TippTimer: React.FC<TippTimerProps> = ({ sendSticker }) => {
   useEffect(() => {
     // Start timer automatically on mount
     setIsActive(true);
+
+    const channel = new BroadcastChannel('group_counseling_channel');
+    channel.onmessage = (event) => {
+      if (event.data && event.data.type === 'FORCE_TIMER_COMPLETE') {
+        setSecondsLeft(0);
+        setIsActive(false);
+        setHasCompleted(true);
+      }
+    };
+
+    return () => {
+      channel.close();
+    };
   }, []);
 
   useEffect(() => {

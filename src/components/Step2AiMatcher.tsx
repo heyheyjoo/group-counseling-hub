@@ -1,37 +1,103 @@
 import React, { useState, useEffect } from 'react';
+import type { Issue } from '../hooks/useSharedState';
+import { analyzeIssuesWithClaude } from '../services/claudeApi';
+import type { TheoryRecommendation } from '../services/claudeApi';
 
 interface Step2AiMatcherProps {
   mode: 'teacher' | 'student';
   onSelectTheory: (theory: string) => void;
+  issues: Issue[];
 }
 
-export const Step2AiMatcher: React.FC<Step2AiMatcherProps> = ({ mode, onSelectTheory }) => {
+// 폴백 데이터 (API Key 없거나 오류 시 사용)
+const FALLBACK_RECOMMENDATIONS: TheoryRecommendation[] = [
+  {
+    theory: '변증법적 행동치료 (DBT)',
+    matchRate: 94,
+    reason:
+      '집단원들의 고민에서 대인관계 갈등과 충동적 분노/감정조절 어려움의 키워드가 다수 검출되었습니다. DBT는 감정조절 장애와 대인관계 효율성 개선을 위한 TIPP(신체 감각 자극) 기법 및 마음챙김 호흡 훈련을 내포하고 있어 현 상태에 최적입니다.',
+    tags: ['#감정조절', '#TIPP 기법', '#마음챙김 호흡'],
+  },
+  {
+    theory: '인지행동치료 (CBT)',
+    matchRate: 76,
+    reason: '부정적 인지왜곡 및 시험 스트레스 등 사고 패턴 교정에 유용합니다.',
+    tags: ['#생각기록장', '#자동적사고'],
+  },
+  {
+    theory: '해결중심 단기치료 (SFBT)',
+    matchRate: 68,
+    reason:
+      '과거 원인 규명보다는 예외적 상황을 찾아 해결책을 모색하는 강점 기반 치료입니다.',
+    tags: ['#기적질문', '#예외질문'],
+  },
+];
+
+const FALLBACK_KEYWORDS = [
+  '대인관계 갈등',
+  '학업 긴장',
+  '감정 조절의 어려움',
+  '충동적 분노',
+  '부모님 소통 부재',
+];
+
+export const Step2AiMatcher: React.FC<Step2AiMatcherProps> = ({
+  mode,
+  onSelectTheory,
+  issues,
+}) => {
   const [analyzing, setAnalyzing] = useState(true);
   const [visibleTags, setVisibleTags] = useState<string[]>([]);
-  
-  const allTags = ['대인관계 갈등', '학업 긴장', '감정 조절의 어려움', '충동적 분노', '부모님 소통 부재'];
+  const [recommendations, setRecommendations] = useState<TheoryRecommendation[]>([]);
+  const [isAiGenerated, setIsAiGenerated] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    if (mode === 'student') return; // Student just waits
+    if (mode === 'student') return;
 
-    // Staggered tags appearance
-    const tagTimers = allTags.map((tag, idx) => {
-      return setTimeout(() => {
-        setVisibleTags((prev) => [...prev, tag]);
-      }, (idx + 1) * 500); // 500ms, 1000ms, 1500ms, etc.
-    });
+    let cancelled = false;
 
-    // End analyzing state after 3 seconds
-    const finishTimer = setTimeout(() => {
-      setAnalyzing(false);
-    }, 3200);
+    const runAnalysis = async () => {
+      // 1단계: 키워드 태그 스태거 애니메이션 (AI 분석 중 표시)
+      const placeholderTags = ['고민 수집 완료', 'AI 분석 시작...', '감정 패턴 파악 중', '이론 매칭 중', '결과 생성 중'];
+      for (let i = 0; i < placeholderTags.length; i++) {
+        await new Promise((res) => setTimeout(res, 500));
+        if (cancelled) return;
+        setVisibleTags((prev) => [...prev, placeholderTags[i]]);
+      }
 
-    return () => {
-      tagTimers.forEach(clearTimeout);
-      clearTimeout(finishTimer);
+      // 2단계: Claude API 호출
+      try {
+        const result = await analyzeIssuesWithClaude(issues);
+        if (cancelled) return;
+
+        setRecommendations(result.recommendations);
+        setIsAiGenerated(true);
+        setVisibleTags(result.keywords);
+      } catch (err) {
+        if (cancelled) return;
+        const errMsg = err instanceof Error ? err.message : 'UNKNOWN';
+        if (errMsg === 'API_KEY_NOT_SET') {
+          setErrorMsg('API Key가 설정되지 않아 기본 분석 결과를 표시합니다.');
+        } else {
+          setErrorMsg('Claude AI 분석 중 오류가 발생하여 기본 결과를 표시합니다.');
+        }
+        setRecommendations(FALLBACK_RECOMMENDATIONS);
+        setVisibleTags(FALLBACK_KEYWORDS);
+        setIsAiGenerated(false);
+      } finally {
+        if (!cancelled) setAnalyzing(false);
+      }
     };
+
+    runAnalysis();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
+  // ─── 학생 화면 ───────────────────────────────────────────
   if (mode === 'student') {
     return (
       <div style={styles.container}>
@@ -54,19 +120,31 @@ export const Step2AiMatcher: React.FC<Step2AiMatcherProps> = ({ mode, onSelectTh
     );
   }
 
-  // Teacher View
+  // ─── 선생님 화면 ─────────────────────────────────────────
+  const topRec = recommendations[0];
+  const altRecs = recommendations.slice(1);
+
   return (
     <div style={styles.container}>
       <div style={styles.header}>
         <h2 style={styles.sectionTitle}>AI 분석 및 상담 이론 추천</h2>
-        <p style={styles.sectionSub}>수집된 고민 키워드를 분석하여 효과가 검증된 상담 기법을 추천합니다.</p>
+        <p style={styles.sectionSub}>
+          {isAiGenerated
+            ? 'Claude AI가 실제 고민 내용을 분석하여 최적의 상담 기법을 추천합니다.'
+            : '수집된 고민 키워드를 분석하여 효과가 검증된 상담 기법을 추천합니다.'}
+        </p>
       </div>
 
       {analyzing ? (
         <div style={styles.loadingCard}>
-          <div style={styles.spinner} />
-          <p style={styles.loadingText}>집단원들의 고민 키워드를 분석하는 중입니다...</p>
-          
+          <div style={styles.spinnerWrapper}>
+            <div style={styles.spinner} />
+            {isAiGenerated && <div style={styles.aiGlow} />}
+          </div>
+          <p style={styles.loadingText}>
+            Claude AI가 {issues.length}개의 고민을 심층 분석하는 중입니다...
+          </p>
+
           <div style={styles.tagsContainer}>
             {visibleTags.map((tag, idx) => (
               <span key={idx} style={styles.keywordTag}>
@@ -77,68 +155,83 @@ export const Step2AiMatcher: React.FC<Step2AiMatcherProps> = ({ mode, onSelectTh
         </div>
       ) : (
         <div style={styles.recommendationWrapper}>
-          {/* Main recommendation (DBT) */}
-          <div 
-            style={styles.dbtCard}
-            onClick={() => onSelectTheory('변증법적 행동치료 (DBT)')}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-4px)';
-              e.currentTarget.style.boxShadow = '0 12px 28px rgba(129, 184, 161, 0.25)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'none';
-              e.currentTarget.style.boxShadow = '0 6px 18px rgba(129, 184, 161, 0.1)';
-            }}
-          >
-            <div style={styles.dbtBadge}>추천도 94% • 최적 기법</div>
-            <div style={styles.dbtHeader}>
-              <h3 style={styles.theoryTitle}>변증법적 행동치료 (DBT)</h3>
-              <span style={styles.selectPrompt}>선택하기 →</span>
+
+          {/* 오류 / 폴백 알림 */}
+          {errorMsg && (
+            <div style={styles.errorNotice}>
+              <span>⚠️ {errorMsg}</span>
             </div>
-            <p style={styles.theoryDesc}>
-              집단원들의 고민에서 <strong>대인관계 갈등</strong>과 <strong>충동적 분노/감정조절 어려움</strong>의 키워드가 다수 검출되었습니다. 
-              DBT는 감정조절 장애와 대인관계 효율성 개선을 위한 TIPP(신체 감각 자극) 기법 및 마음챙김 호흡 훈련을 내포하고 있어 현 상태에 최적입니다.
-            </p>
-            <div style={styles.tagList}>
-              <span style={styles.tag}>#감정조절</span>
-              <span style={styles.tag}>#TIPP 기법</span>
-              <span style={styles.tag}>#마음챙김 호흡</span>
+          )}
+
+          {/* 1위 추천 카드 */}
+          {topRec && (
+            <div
+              style={styles.dbtCard}
+              onClick={() => onSelectTheory(topRec.theory)}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-4px)';
+                e.currentTarget.style.boxShadow = '0 12px 28px rgba(129, 184, 161, 0.25)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'none';
+                e.currentTarget.style.boxShadow = '0 6px 18px rgba(129, 184, 161, 0.1)';
+              }}
+            >
+              <div style={styles.dbtBadgeRow}>
+                <div style={styles.dbtBadge}>
+                  추천도 {topRec.matchRate}% • 최적 기법
+                </div>
+                {isAiGenerated && (
+                  <div style={styles.aiGeneratedBadge}>✨ Claude AI 분석 결과</div>
+                )}
+              </div>
+              <div style={styles.dbtHeader}>
+                <h3 style={styles.theoryTitle}>{topRec.theory}</h3>
+                <span style={styles.selectPrompt}>선택하기 →</span>
+              </div>
+              <p style={styles.theoryDesc}>{topRec.reason}</p>
+              <div style={styles.tagList}>
+                {topRec.tags.map((tag, i) => (
+                  <span key={i} style={styles.tag}>{tag}</span>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* 고민 키워드 뱃지 */}
+          {visibleTags.length > 0 && (
+            <div style={styles.keywordsSection}>
+              <div style={styles.dividerTitle}>📊 분석된 주요 고민 키워드</div>
+              <div style={styles.keywordsRow}>
+                {visibleTags.map((kw, i) => (
+                  <span key={i} style={styles.kwBadge}>🔍 {kw}</span>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div style={styles.dividerTitle}>다른 제안된 대안 기법</div>
 
-          {/* Alternative recommendations (CBT & SFBT) */}
+          {/* 대안 추천 카드들 */}
           <div style={styles.alternativesGrid}>
-            <div 
-              style={styles.altCard}
-              onClick={() => onSelectTheory('인지행동치료 (CBT)')}
-              onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-              onMouseLeave={(e) => e.currentTarget.style.transform = 'none'}
-            >
-              <div style={styles.altBadge}>매칭률 76%</div>
-              <h4 style={styles.altTitle}>인지행동치료 (CBT)</h4>
-              <p style={styles.altDesc}>부정적 인지왜곡 및 시험 스트레스 등 사고 패턴 교정에 유용합니다.</p>
-              <div style={styles.tagListSmall}>
-                <span>#생각기록장</span>
-                <span>#자동적사고</span>
+            {altRecs.map((rec) => (
+              <div
+                key={rec.theory}
+                style={styles.altCard}
+                onClick={() => onSelectTheory(rec.theory)}
+                onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
+                onMouseLeave={(e) => (e.currentTarget.style.transform = 'none')}
+              >
+                <div style={styles.altBadge}>매칭률 {rec.matchRate}%</div>
+                <h4 style={styles.altTitle}>{rec.theory}</h4>
+                <p style={styles.altDesc}>{rec.reason}</p>
+                <div style={styles.tagListSmall}>
+                  {rec.tags.map((tag, i) => (
+                    <span key={i}>{tag}</span>
+                  ))}
+                </div>
               </div>
-            </div>
-
-            <div 
-              style={styles.altCard}
-              onClick={() => onSelectTheory('해결중심 단기치료 (SFBT)')}
-              onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-              onMouseLeave={(e) => e.currentTarget.style.transform = 'none'}
-            >
-              <div style={styles.altBadge}>매칭률 68%</div>
-              <h4 style={styles.altTitle}>해결중심 단기치료 (SFBT)</h4>
-              <p style={styles.altDesc}>과거 원인 규명보다는 예외적 상황을 찾아 해결책을 모색하는 강점 기반 치료입니다.</p>
-              <div style={styles.tagListSmall}>
-                <span>#기적질문</span>
-                <span>#예외질문</span>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       )}
@@ -173,7 +266,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     backgroundColor: '#FFFFFF',
     borderRadius: '24px',
     padding: '48px 32px',
-    boxShadow: '0 8px 24px var(--color-shadow)',
+    boxShadow: '0 8px 24px rgba(74, 74, 74, 0.08)',
     maxWidth: '520px',
     width: '100%',
     textAlign: 'center',
@@ -237,13 +330,13 @@ const styles: { [key: string]: React.CSSProperties } = {
     backgroundColor: '#A8D5C2',
     width: '50%',
     borderRadius: '2px',
-    animation: 'float 1.5s infinite ease-in-out', // reusable movement
+    animation: 'float 1.5s infinite ease-in-out',
   },
   loadingCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: '24px',
     padding: '48px 32px',
-    boxShadow: '0 8px 24px var(--color-shadow)',
+    boxShadow: '0 8px 24px rgba(74, 74, 74, 0.08)',
     maxWidth: '640px',
     width: '100%',
     textAlign: 'center',
@@ -253,13 +346,29 @@ const styles: { [key: string]: React.CSSProperties } = {
     minHeight: '300px',
     justifyContent: 'center',
   },
+  spinnerWrapper: {
+    position: 'relative',
+    width: '64px',
+    height: '64px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   spinner: {
     width: '48px',
     height: '48px',
     border: '4px solid #FDFAF5',
     borderTop: '4px solid #A8D5C2',
     borderRadius: '50%',
-    animation: 'popIn 1s infinite linear', // using rotate styled inline
+    animation: 'spin 1s infinite linear',
+  },
+  aiGlow: {
+    position: 'absolute',
+    width: '64px',
+    height: '64px',
+    borderRadius: '50%',
+    background: 'radial-gradient(circle, rgba(168,213,194,0.3) 0%, transparent 70%)',
+    animation: 'float 2s infinite ease-in-out',
   },
   loadingText: {
     fontSize: '16px',
@@ -288,6 +397,22 @@ const styles: { [key: string]: React.CSSProperties } = {
     maxWidth: '800px',
     width: '100%',
   },
+  errorNotice: {
+    backgroundColor: '#FFF8EC',
+    border: '1.5px solid #F4C2A1',
+    borderRadius: '12px',
+    padding: '12px 16px',
+    marginBottom: '20px',
+    fontSize: '13px',
+    color: '#7E5C3C',
+    fontWeight: '500',
+  },
+  dbtBadgeRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    marginBottom: '8px',
+  },
   dbtCard: {
     backgroundColor: '#FFFFFF',
     border: '2.5px solid #A8D5C2',
@@ -297,12 +422,9 @@ const styles: { [key: string]: React.CSSProperties } = {
     cursor: 'pointer',
     transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
     position: 'relative',
-    marginBottom: '32px',
+    marginBottom: '24px',
   },
   dbtBadge: {
-    position: 'absolute',
-    top: '-14px',
-    left: '32px',
     backgroundColor: '#A8D5C2',
     color: '#FFFFFF',
     fontSize: '12px',
@@ -310,6 +432,17 @@ const styles: { [key: string]: React.CSSProperties } = {
     padding: '4px 14px',
     borderRadius: '12px',
     boxShadow: '0 2px 6px rgba(129, 184, 161, 0.3)',
+    display: 'inline-block',
+  },
+  aiGeneratedBadge: {
+    backgroundColor: '#F0EBFF',
+    color: '#7C5CBF',
+    fontSize: '11px',
+    fontWeight: '700',
+    padding: '4px 12px',
+    borderRadius: '12px',
+    border: '1px solid #C8B4F0',
+    display: 'inline-block',
   },
   dbtHeader: {
     display: 'flex',
@@ -337,6 +470,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   tagList: {
     display: 'flex',
     gap: '8px',
+    flexWrap: 'wrap',
   },
   tag: {
     fontSize: '12px',
@@ -345,6 +479,24 @@ const styles: { [key: string]: React.CSSProperties } = {
     padding: '4px 12px',
     borderRadius: '8px',
     fontWeight: '700',
+  },
+  keywordsSection: {
+    marginBottom: '24px',
+  },
+  keywordsRow: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '8px',
+    marginTop: '10px',
+  },
+  kwBadge: {
+    backgroundColor: '#FDFAF5',
+    border: '1px solid #A8D5C2',
+    color: '#4A4A4A',
+    padding: '5px 12px',
+    borderRadius: '14px',
+    fontSize: '12px',
+    fontWeight: '500',
   },
   dividerTitle: {
     fontSize: '14px',
@@ -391,20 +543,8 @@ const styles: { [key: string]: React.CSSProperties } = {
   tagListSmall: {
     display: 'flex',
     gap: '6px',
+    flexWrap: 'wrap',
+    fontSize: '12px',
+    color: '#81B8A1',
   },
 };
-
-// Add rotation style block inside component manually since spinner doesn't run default css rotates
-if (typeof document !== 'undefined') {
-  const style = document.createElement('style');
-  style.innerHTML = `
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-    .spinner-active {
-      animation: spin 1s infinite linear !important;
-    }
-  `;
-  document.head.appendChild(style);
-}

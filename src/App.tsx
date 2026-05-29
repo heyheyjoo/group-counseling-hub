@@ -14,6 +14,8 @@ function App() {
     issues,
     stickers,
     sessionLogs,
+    activeToolkit,
+    isGeneratingReport,
     setStep,
     addIssue,
     fillDummyIssues,
@@ -21,6 +23,7 @@ function App() {
     sendSticker,
     endSession,
     resetSession,
+    setActiveToolkit,
   } = useSharedState();
 
   // Local state for selecting role in this specific tab
@@ -91,6 +94,7 @@ function App() {
         {step === 2 && (
           <Step2AiMatcher
             mode={mode}
+            issues={issues}
             onSelectTheory={selectTheory}
           />
         )}
@@ -101,6 +105,8 @@ function App() {
             stickers={stickers}
             sendSticker={sendSticker}
             onEndSession={endSession}
+            activeToolkit={activeToolkit}
+            setActiveToolkit={setActiveToolkit}
           />
         )}
 
@@ -108,6 +114,7 @@ function App() {
           <Step4Archiving
             mode={mode}
             sessionLogs={sessionLogs}
+            isGeneratingReport={isGeneratingReport}
             onRestart={resetSession}
           />
         )}

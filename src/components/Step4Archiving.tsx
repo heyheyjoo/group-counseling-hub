@@ -5,12 +5,14 @@ interface Step4ArchivingProps {
   mode: 'teacher' | 'student';
   sessionLogs: SessionLog[];
   onRestart: () => void;
+  isGeneratingReport: boolean;
 }
 
 export const Step4Archiving: React.FC<Step4ArchivingProps> = ({
   mode,
   sessionLogs,
   onRestart,
+  isGeneratingReport,
 }) => {
   
   const handleExport = () => {
@@ -93,13 +95,44 @@ export const Step4Archiving: React.FC<Step4ArchivingProps> = ({
                   <span style={styles.statLabel}>나눈 스티커</span>
                   <strong style={styles.statVal}>{log.stickerCount}개</strong>
                 </div>
+                <div style={styles.statBox}>
+                  <span style={styles.statLabel}>사용된 기법</span>
+                  <strong style={styles.statVal}>{log.toolkits?.length || 0}개</strong>
+                </div>
               </div>
+
+              {/* Toolkits used */}
+              {log.toolkits && log.toolkits.length > 0 && (
+                <div style={styles.toolkitsRow}>
+                  {log.toolkits.map((toolkit) => (
+                    <span key={toolkit} style={styles.toolkitBadge}>
+                      {toolkit === 'TIPP 호흡 타이머' ? '🧘' : toolkit === '감정 온도계' ? '🌡️' : '🛑'} {toolkit}
+                    </span>
+                  ))}
+                </div>
+              )}
 
               <div style={styles.logDivider} />
 
               <div style={styles.logSummary}>
-                <strong style={styles.summaryLabel}>종합 요약 :</strong>
-                <p style={styles.summaryText}>{log.summary}</p>
+                <div style={styles.summaryLabelRow}>
+                  <strong style={styles.summaryLabel}>종합 요약 :</strong>
+                  {isGeneratingReport && sessionLogs.indexOf(log) === 0 ? (
+                    <span style={styles.aiGeneratingBadge}>
+                      <span style={styles.dotSpinner}>⋯</span> Claude AI 리포트 생성 중
+                    </span>
+                  ) : (
+                    <span style={styles.aiReportBadge}>✨ AI 생성 리포트</span>
+                  )}
+                </div>
+                {isGeneratingReport && sessionLogs.indexOf(log) === 0 ? (
+                  <div style={styles.reportLoading}>
+                    <div style={styles.reportSpinner} />
+                    <p style={styles.reportLoadingText}>Claude AI가 세션 데이터를 분석하여 전문 리포트를 작성하고 있습니다...</p>
+                  </div>
+                ) : (
+                  <p style={styles.summaryText}>{log.summary}</p>
+                )}
               </div>
             </div>
           ))}
@@ -149,7 +182,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontWeight: '700',
     fontSize: '14px',
     color: '#4A4A4A',
-    boxShadow: '0 2px 6px var(--color-shadow)',
+    boxShadow: '0 2px 6px rgba(74, 74, 74, 0.08)',
     transition: 'all 0.2s ease',
   },
   restartBtn: {
@@ -208,7 +241,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     backgroundColor: '#FFFFFF',
     borderRadius: '18px',
     padding: '24px',
-    boxShadow: '0 4px 12px var(--color-shadow)',
+    boxShadow: '0 4px 12px rgba(74, 74, 74, 0.08)',
     border: '1px solid rgba(168, 213, 194, 0.12)',
     transition: 'transform 0.3s ease, box-shadow 0.3s ease',
   },
@@ -238,14 +271,16 @@ const styles: { [key: string]: React.CSSProperties } = {
   },
   logStats: {
     display: 'flex',
-    gap: '20px',
+    gap: '16px',
     marginBottom: '16px',
+    flexWrap: 'wrap',
   },
   statBox: {
     backgroundColor: '#FDFAF5',
     padding: '10px 16px',
     borderRadius: '10px',
     flex: 1,
+    minWidth: '100px',
     display: 'flex',
     flexDirection: 'column',
     gap: '4px',
@@ -258,6 +293,21 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontSize: '16px',
     fontWeight: '700',
     color: '#4A4A4A',
+  },
+  toolkitsRow: {
+    display: 'flex',
+    gap: '8px',
+    marginBottom: '16px',
+    flexWrap: 'wrap',
+  },
+  toolkitBadge: {
+    backgroundColor: '#FBE6D8',
+    color: '#E0A481',
+    fontSize: '11px',
+    fontWeight: '700',
+    padding: '4px 10px',
+    borderRadius: '8px',
+    border: '1px solid #F4C2A1',
   },
   logDivider: {
     height: '1px',
@@ -278,5 +328,61 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontSize: '13px',
     color: '#4A4A4A',
     lineHeight: '1.6',
+  },
+  summaryLabelRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    marginBottom: '10px',
+    flexWrap: 'wrap' as const,
+  },
+  aiReportBadge: {
+    backgroundColor: '#F0EBFF',
+    color: '#7C5CBF',
+    fontSize: '11px',
+    fontWeight: '700',
+    padding: '3px 10px',
+    borderRadius: '10px',
+    border: '1px solid #C8B4F0',
+  },
+  aiGeneratingBadge: {
+    backgroundColor: '#FFF8EC',
+    color: '#D4870A',
+    fontSize: '11px',
+    fontWeight: '700',
+    padding: '3px 10px',
+    borderRadius: '10px',
+    border: '1px solid #F4C2A1',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+  },
+  dotSpinner: {
+    fontSize: '16px',
+    animation: 'float 1s infinite ease-in-out',
+    letterSpacing: '2px',
+  },
+  reportLoading: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    backgroundColor: '#FDFAF5',
+    borderRadius: '10px',
+    padding: '14px 18px',
+    border: '1px dashed #F4C2A1',
+  },
+  reportSpinner: {
+    width: '20px',
+    height: '20px',
+    border: '3px solid #FDFAF5',
+    borderTop: '3px solid #A8D5C2',
+    borderRadius: '50%',
+    animation: 'spin 1s infinite linear',
+    flexShrink: 0,
+  },
+  reportLoadingText: {
+    fontSize: '13px',
+    color: '#7E7E7E',
+    fontStyle: 'italic',
   },
 };

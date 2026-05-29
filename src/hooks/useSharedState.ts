@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { generateSessionReport } from '../services/claudeApi';
 
 export interface Issue {
   id: string;
@@ -19,8 +20,11 @@ export interface SessionLog {
   theory: string;
   issueCount: number;
   stickerCount: number;
+  toolkits: string[];
   summary: string;
 }
+
+export type ToolkitType = 'tipp' | 'emotion' | 'stop';
 
 const CHANNEL_NAME = 'group_counseling_channel';
 
@@ -50,6 +54,16 @@ export const useSharedState = () => {
   const [theory, setTheoryState] = useState<string | null>(() => getLocalStorage('gc_theory', null));
   const [stickers, setStickersState] = useState<Sticker[]>(() => getLocalStorage('gc_stickers', []));
   const [sessionLogs, setSessionLogsState] = useState<SessionLog[]>(() => getLocalStorage('gc_session_logs', []));
+  const [activeToolkit, setActiveToolkitState] = useState<ToolkitType>(() => getLocalStorage('gc_active_toolkit', 'tipp'));
+
+  // Track which toolkits have been used in this session
+  const [usedToolkits, setUsedToolkits] = useState<string[]>(() => {
+    const stored = getLocalStorage<string[]>('gc_used_toolkits', []);
+    return stored;
+  });
+
+  // Claude 리포트 생성 중 여부
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
   // 2. BroadcastChannel ref to keep a stable channel instance
   const channelRef = useRef<BroadcastChannel | null>(null);
@@ -76,6 +90,9 @@ export const useSharedState = () => {
           break;
         case 'SYNC_SESSION_LOGS':
           setSessionLogsState(payload);
+          break;
+        case 'SYNC_ACTIVE_TOOLKIT':
+          setActiveToolkitState(payload);
           break;
         case 'STICKER_RECEIVED':
           // Append to local stickers list
@@ -165,6 +182,21 @@ export const useSharedState = () => {
     setStep(3);
   };
 
+  const setActiveToolkit = (toolkit: ToolkitType) => {
+    setActiveToolkitState(toolkit);
+    setLocalStorage('gc_active_toolkit', toolkit);
+    channelRef.current?.postMessage({ type: 'SYNC_ACTIVE_TOOLKIT', payload: toolkit });
+
+    // Track used toolkits
+    const toolkitLabel = toolkit === 'tipp' ? 'TIPP 호흡 타이머' : toolkit === 'emotion' ? '감정 온도계' : 'STOP 성찰 카드';
+    setUsedToolkits((prev) => {
+      if (prev.includes(toolkitLabel)) return prev;
+      const next = [...prev, toolkitLabel];
+      setLocalStorage('gc_used_toolkits', next);
+      return next;
+    });
+  };
+
   const sendSticker = (emoji: string) => {
     const newSticker: Sticker = {
       id: Math.random().toString(36).substring(2, 9),
@@ -183,7 +215,7 @@ export const useSharedState = () => {
     channelRef.current?.postMessage({ type: 'STICKER_RECEIVED', payload: newSticker });
   };
 
-  const endSession = () => {
+  const endSession = async () => {
     const sessionDate = new Date().toLocaleDateString('ko-KR', {
       year: 'numeric',
       month: 'long',
@@ -192,26 +224,70 @@ export const useSharedState = () => {
       minute: '2-digit',
     });
 
+    // Include current active toolkit if not already tracked
+    const currentLabel = activeToolkit === 'tipp' ? 'TIPP 호흡 타이머' : activeToolkit === 'emotion' ? '감정 온도계' : 'STOP 성찰 카드';
+    const finalToolkits = usedToolkits.includes(currentLabel) ? usedToolkits : [...usedToolkits, currentLabel];
+
+    // Go to step 4 immediately (with placeholder summary)
+    const placeholderSummary = `총 ${issues.length}개의 고민을 중심으로 ${theory || 'DBT'} 기법을 활용한 ${finalToolkits.join(', ')} 활동을 진행하였습니다. Claude AI가 종합 리포트를 생성 중입니다...`;
+
     const newLog: SessionLog = {
       id: Math.random().toString(36).substring(2, 9),
       date: sessionDate,
       theory: theory || 'DBT (변증법적 행동치료)',
       issueCount: issues.length,
       stickerCount: stickers.length,
-      summary: `친구 갈등 및 불안 등 총 ${issues.length}개의 고민을 중심으로, ${theory || 'DBT'} 기법을 활용한 1분 호흡(TIPP) 훈련을 성공적으로 진행하였습니다. 집단원들이 총 ${stickers.length}개의 긍정적인 응원 스티커를 실시간으로 주고받으며 심리적 안정감을 공유했습니다.`,
+      toolkits: finalToolkits,
+      summary: placeholderSummary,
     };
 
     const nextLogs = [newLog, ...sessionLogs];
     setSessionLogsState(nextLogs);
     setLocalStorage('gc_session_logs', nextLogs);
     channelRef.current?.postMessage({ type: 'SYNC_SESSION_LOGS', payload: nextLogs });
-
-    // Go to step 4
     setStep(4);
+
+    // Claude API로 리포트 비동기 생성
+    setIsGeneratingReport(true);
+    try {
+      const aiSummary = await generateSessionReport({
+        date: sessionDate,
+        theory: theory || 'DBT (변증법적 행동치료)',
+        issueCount: issues.length,
+        stickerCount: stickers.length,
+        toolkits: finalToolkits,
+        issues: issues,
+      });
+
+      // 생성 완료 후 최신 로그의 summary 업데이트
+      setSessionLogsState((prev) => {
+        const updated = prev.map((log) =>
+          log.id === newLog.id ? { ...log, summary: aiSummary } : log
+        );
+        setLocalStorage('gc_session_logs', updated);
+        channelRef.current?.postMessage({ type: 'SYNC_SESSION_LOGS', payload: updated });
+        return updated;
+      });
+    } catch (err) {
+      console.warn('Claude 리포트 생성 실패, 기본 요약 유지:', err);
+      // 폴백: 기존 placeholder 유지, 단 문구 교체
+      setSessionLogsState((prev) => {
+        const updated = prev.map((log) =>
+          log.id === newLog.id
+            ? { ...log, summary: `친구 갈등 및 불안 등 총 ${issues.length}개의 고민을 중심으로, ${theory || 'DBT'} 기법을 활용한 ${finalToolkits.join(', ')} 활동을 성공적으로 진행하였습니다. 집단원들이 총 ${stickers.length}개의 긍정적인 응원 스티커를 실시간으로 주고받으며 심리적 안정감을 공유했습니다.` }
+            : log
+        );
+        setLocalStorage('gc_session_logs', updated);
+        channelRef.current?.postMessage({ type: 'SYNC_SESSION_LOGS', payload: updated });
+        return updated;
+      });
+    } finally {
+      setIsGeneratingReport(false);
+    }
   };
 
   const resetSession = () => {
-    // Clear issues, theory, stickers, but keep session logs
+    // Clear issues, theory, stickers, toolkit, but keep session logs
     setIssuesState([]);
     setLocalStorage('gc_issues', []);
     channelRef.current?.postMessage({ type: 'SYNC_ISSUES', payload: [] });
@@ -224,18 +300,15 @@ export const useSharedState = () => {
     setLocalStorage('gc_stickers', []);
     channelRef.current?.postMessage({ type: 'SYNC_STICKERS', payload: [] });
 
+    setActiveToolkitState('tipp');
+    setLocalStorage('gc_active_toolkit', 'tipp');
+    channelRef.current?.postMessage({ type: 'SYNC_ACTIVE_TOOLKIT', payload: 'tipp' });
+
+    setUsedToolkits([]);
+    setLocalStorage('gc_used_toolkits', []);
+
     // Go to step 1
     setStep(1);
-  };
-
-  // Full reset option (clean everything including logs)
-  const fullReset = () => {
-    localStorage.clear();
-    setStepState(1);
-    setIssuesState([]);
-    setTheoryState(null);
-    setStickersState([]);
-    setSessionLogsState([]);
   };
 
   return {
@@ -244,6 +317,8 @@ export const useSharedState = () => {
     theory,
     stickers,
     sessionLogs,
+    activeToolkit,
+    isGeneratingReport,
     setStep,
     addIssue,
     fillDummyIssues,
@@ -251,6 +326,6 @@ export const useSharedState = () => {
     sendSticker,
     endSession,
     resetSession,
-    fullReset,
+    setActiveToolkit,
   };
 };
