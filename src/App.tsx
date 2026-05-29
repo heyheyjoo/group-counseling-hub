@@ -44,7 +44,7 @@ function App() {
   if (!mode || step === 0) {
     return (
       <div className="app-container">
-        <IntroPage onSelectMode={handleSelectMode} />
+        <IntroPage
       </div>
     );
   }
@@ -66,8 +66,8 @@ function App() {
             </span>
           </div>
         </div>
-        <button 
-          onClick={handleExitMode} 
+        <button
+          onClick={handleExitMode}
           style={styles.exitBtn}
           onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F0EBE5'}
           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FFFFFF'}
